@@ -28,6 +28,10 @@ func (e *AgeEvaluator) Age(seenAt time.Time) time.Duration {
 	return age
 }
 
+func (e *AgeEvaluator) Timeout() time.Duration {
+	return e.timeout
+}
+
 func (e *AgeEvaluator) Healthy(seenAt time.Time) bool {
 	return e.Age(seenAt) <= e.timeout
 }

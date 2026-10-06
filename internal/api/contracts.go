@@ -22,6 +22,15 @@ type ScanRequest struct {
 	Chunks    int     `json:"chunks"`
 }
 
+type HeartbeatRequest struct {
+	Sequence uint64 `json:"sequence"`
+}
+
+type MaintenanceRequest struct {
+	Action string `json:"action"`
+	Reason string `json:"reason"`
+}
+
 type SwitchoverRequest struct {
 	Reason string `json:"reason"`
 }

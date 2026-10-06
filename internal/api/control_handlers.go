@@ -6,16 +6,77 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/wyw14/cry-103/internal/incident"
+	"github.com/wyw14/cry-103/internal/landing"
 	"github.com/wyw14/cry-103/internal/otdr"
 	"github.com/wyw14/cry-103/internal/repeater"
 )
 
 func (s *Server) getLandingHealth(writer http.ResponseWriter, request *http.Request) {
-	if chi.URLParam(request, "id") != s.services.Station.Snapshot().ID {
-		writeJSON(writer, http.StatusNotFound, ErrorResponse{Error: "landing station not found"})
+	station, ok := s.landingStation(writer, request)
+	if !ok {
 		return
 	}
-	writeJSON(writer, http.StatusOK, s.services.Health.Evaluate(s.services.Station, s.services.Clock.Now()))
+	writeJSON(writer, http.StatusOK, s.services.Health.Evaluate(station, s.services.Clock.Now()))
+}
+
+func (s *Server) recordHeartbeat(writer http.ResponseWriter, request *http.Request) {
+	station, ok := s.landingStation(writer, request)
+	if !ok {
+		return
+	}
+	var input HeartbeatRequest
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, http.StatusBadRequest, err)
+		return
+	}
+	if input.Sequence == 0 {
+		writeJSON(writer, http.StatusBadRequest, ErrorResponse{Error: "heartbeat sequence must be positive"})
+		return
+	}
+	report, err := s.services.Health.Record(station, input.Sequence, s.services.Clock.Now())
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(writer, http.StatusAccepted, report)
+}
+
+func (s *Server) updateMaintenance(writer http.ResponseWriter, request *http.Request) {
+	station, ok := s.landingStation(writer, request)
+	if !ok {
+		return
+	}
+	var input MaintenanceRequest
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, http.StatusBadRequest, err)
+		return
+	}
+	switch input.Action {
+	case "begin":
+		if input.Reason == "" {
+			writeJSON(writer, http.StatusBadRequest, ErrorResponse{Error: "maintenance reason is required"})
+			return
+		}
+		writeJSON(writer, http.StatusOK, s.services.Health.BeginMaintenance(station, input.Reason, s.services.Clock.Now()))
+	case "complete":
+		report, err := s.services.Health.EndMaintenance(station, s.services.Clock.Now())
+		if err != nil {
+			writeError(writer, http.StatusConflict, err)
+			return
+		}
+		writeJSON(writer, http.StatusOK, report)
+	default:
+		writeJSON(writer, http.StatusBadRequest, ErrorResponse{Error: "unsupported maintenance action"})
+	}
+}
+
+func (s *Server) landingStation(writer http.ResponseWriter, request *http.Request) (*landing.Station, bool) {
+	station := s.services.Station
+	if station == nil || chi.URLParam(request, "id") != station.Snapshot().ID {
+		writeJSON(writer, http.StatusNotFound, ErrorResponse{Error: "landing station not found"})
+		return nil, false
+	}
+	return station, true
 }
 
 func (s *Server) rampRepeater(writer http.ResponseWriter, request *http.Request) {
