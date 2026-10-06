@@ -93,13 +93,18 @@ func buildServices(cfg config) (*api.Services, error) {
 		return nil, err
 	}
 	health := landing.NewHealthService(ageEvaluator, heartbeats)
-	if _, err := health.Record(station, 1, now()); err != nil {
-		return nil, fmt.Errorf("seed heartbeat checkpoint: %w", err)
-	}
-	if _, err := health.Recover(station); err != nil {
+	recovered, err := health.Recover(station)
+	if err != nil {
 		return nil, err
 	}
-	health.Evaluate(station, now())
+	if recovered.Sequence == 0 {
+		if _, err := health.Record(station, 1, now()); err != nil {
+			return nil, fmt.Errorf("seed heartbeat checkpoint: %w", err)
+		}
+	}
+	if _, err := health.Evaluate(station, now()); err != nil {
+		return nil, err
+	}
 
 	assets := repair.NewAssets()
 	assets.AddSpan(spanS3)

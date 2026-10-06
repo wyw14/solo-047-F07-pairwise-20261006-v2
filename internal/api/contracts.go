@@ -77,3 +77,16 @@ type IncidentRequest struct {
 	DistanceKM   float64 `json:"distance_km"`
 	RequiresPeer bool    `json:"requires_peer"`
 }
+
+type HeartbeatRequest struct {
+	Sequence uint64 `json:"sequence"`
+}
+
+type MaintenanceRequest struct {
+	Action string `json:"action"`
+	Reason string `json:"reason"`
+}
+
+type RecoveryRequest struct {
+	Reason string `json:"reason"`
+}

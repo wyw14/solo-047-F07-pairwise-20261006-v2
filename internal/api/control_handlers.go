@@ -6,16 +6,101 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/wyw14/cry-103/internal/incident"
+	"github.com/wyw14/cry-103/internal/landing"
 	"github.com/wyw14/cry-103/internal/otdr"
 	"github.com/wyw14/cry-103/internal/repeater"
 )
 
-func (s *Server) getLandingHealth(writer http.ResponseWriter, request *http.Request) {
-	if chi.URLParam(request, "id") != s.services.Station.Snapshot().ID {
+func (s *Server) requireLandingStation(writer http.ResponseWriter, request *http.Request) (*landing.Station, bool) {
+	if s.services.Station == nil || chi.URLParam(request, "id") != s.services.Station.Snapshot().ID {
 		writeJSON(writer, http.StatusNotFound, ErrorResponse{Error: "landing station not found"})
+		return nil, false
+	}
+	return s.services.Station, true
+}
+
+func (s *Server) getLandingHealth(writer http.ResponseWriter, request *http.Request) {
+	station, ok := s.requireLandingStation(writer, request)
+	if !ok {
 		return
 	}
-	writeJSON(writer, http.StatusOK, s.services.Health.Evaluate(s.services.Station, s.services.Clock.Now()))
+	detail, err := s.services.Health.Evaluate(station, s.services.Clock.Now())
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, detail)
+}
+
+func (s *Server) recordHeartbeat(writer http.ResponseWriter, request *http.Request) {
+	station, ok := s.requireLandingStation(writer, request)
+	if !ok {
+		return
+	}
+	var input HeartbeatRequest
+	if err := decodeJSON(request, &input); err != nil {
+		writeJSON(writer, http.StatusBadRequest, err)
+		return
+	}
+	if _, err := s.services.Health.Record(station, input.Sequence, s.services.Clock.Now()); err != nil {
+		writeError(writer, http.StatusInternalServerError, err)
+		return
+	}
+	detail, err := s.services.Health.Evaluate(station, s.services.Clock.Now())
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, detail)
+}
+
+func (s *Server) controlMaintenance(writer http.ResponseWriter, request *http.Request) {
+	station, ok := s.requireLandingStation(writer, request)
+	if !ok {
+		return
+	}
+	var input MaintenanceRequest
+	if err := decodeJSON(request, &input); err != nil {
+		writeJSON(writer, http.StatusBadRequest, err)
+		return
+	}
+	var err error
+	switch input.Action {
+	case "begin":
+		_, err = s.services.Health.BeginMaintenance(station, s.services.Clock.Now())
+	case "end":
+		_, err = s.services.Health.EndMaintenance(station, input.Reason, s.services.Clock.Now())
+	default:
+		writeJSON(writer, http.StatusBadRequest, ErrorResponse{Error: "maintenance action must be begin or end"})
+		return
+	}
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, s.services.Health.Detail(station, s.services.Clock.Now()))
+}
+
+func (s *Server) confirmRecovery(writer http.ResponseWriter, request *http.Request) {
+	station, ok := s.requireLandingStation(writer, request)
+	if !ok {
+		return
+	}
+	var input RecoveryRequest
+	if err := decodeJSON(request, &input); err != nil {
+		writeJSON(writer, http.StatusBadRequest, err)
+		return
+	}
+	if _, err := s.services.Health.ConfirmRecovery(station, input.Reason, s.services.Clock.Now()); err != nil {
+		writeJSON(writer, http.StatusConflict, err)
+		return
+	}
+	detail, err := s.services.Health.Evaluate(station, s.services.Clock.Now())
+	if err != nil {
+		writeJSON(writer, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, detail)
 }
 
 func (s *Server) rampRepeater(writer http.ResponseWriter, request *http.Request) {

@@ -1,7 +1,5 @@
 package store
 
-import "time"
-
 type HeartbeatStore struct {
 	checkpoints *Checkpoints
 }
@@ -10,12 +8,12 @@ func NewHeartbeatStore(checkpoints *Checkpoints) *HeartbeatStore {
 	return &HeartbeatStore{checkpoints: checkpoints}
 }
 
-func (s *HeartbeatStore) Record(stationID string, sequence uint64, seenAt time.Time) error {
-	return s.checkpoints.SaveHeartbeat(HeartbeatSnapshot{
-		StationID: stationID,
-		SeenAt:    seenAt.UTC(),
-		Sequence:  sequence,
-	})
+func (s *HeartbeatStore) Record(snapshot HeartbeatSnapshot) error {
+	snapshot.SeenAt = snapshot.SeenAt.UTC()
+	snapshot.StateChangedAt = snapshot.StateChangedAt.UTC()
+	snapshot.LastRecoveredAt = snapshot.LastRecoveredAt.UTC()
+	snapshot.LastAcceptedBeatAt = snapshot.LastAcceptedBeatAt.UTC()
+	return s.checkpoints.SaveHeartbeat(snapshot)
 }
 
 func (s *HeartbeatStore) Load(stationID string) (HeartbeatSnapshot, bool, error) {
@@ -24,5 +22,8 @@ func (s *HeartbeatStore) Load(stationID string) (HeartbeatSnapshot, bool, error)
 		return value, found, err
 	}
 	value.SeenAt = value.SeenAt.UTC()
+	value.StateChangedAt = value.StateChangedAt.UTC()
+	value.LastRecoveredAt = value.LastRecoveredAt.UTC()
+	value.LastAcceptedBeatAt = value.LastAcceptedBeatAt.UTC()
 	return value, true, nil
 }

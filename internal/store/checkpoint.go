@@ -12,9 +12,15 @@ type RampCheckpoint struct {
 }
 
 type HeartbeatSnapshot struct {
-	StationID string    `json:"station_id"`
-	SeenAt    time.Time `json:"seen_at"`
-	Sequence  uint64    `json:"sequence"`
+	StationID          string    `json:"station_id"`
+	SeenAt             time.Time `json:"seen_at"`
+	Sequence           uint64    `json:"sequence"`
+	State              string    `json:"state"`
+	StateChangedAt     time.Time `json:"state_changed_at"`
+	StateReason        string    `json:"state_reason"`
+	LastRecoveryReason string    `json:"last_recovery_reason"`
+	LastRecoveredAt    time.Time `json:"last_recovered_at"`
+	LastAcceptedBeatAt time.Time `json:"last_accepted_beat_at"`
 }
 
 type Checkpoints struct {
